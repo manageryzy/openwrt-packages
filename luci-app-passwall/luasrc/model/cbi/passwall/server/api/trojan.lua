@@ -4,11 +4,11 @@ function gen_config(user)
     local cipher13 = "TLS_AES_128_GCM_SHA256:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_256_GCM_SHA384"
     local config = {
         run_type = "server",
-        local_addr = "0.0.0.0",
+        local_addr = "::",
         local_port = tonumber(user.port),
         remote_addr = (user.remote_enable == "1" and user.remote_address) and user.remote_address or nil,
-        remote_port = (user.remote_enable == "1" and user.remote_port) and user.remote_port or nil,
-        password = user.password,
+        remote_port = (user.remote_enable == "1" and user.remote_port) and tonumber(user.remote_port) or nil,
+        password = user.uuid,
         log_level = 1,
         ssl = {
             cert = user.tls_certificateFile,
@@ -16,10 +16,9 @@ function gen_config(user)
             key_password = "",
             cipher = user.fingerprint == nil and cipher or (user.fingerprint == "disable" and cipher13 .. ":" .. cipher or ""),
             cipher_tls13 = user.fingerprint == nil and cipher13 or nil,
-            sni = "",
-            verify = false,
+            sni = user.tls_serverName,
+            verify = (user.tls_allowInsecure ~= "1") and true or false,
             verify_hostname = false,
-            alpn = (user.trojan_ws == "1") and {} or {"h2", "http/1.1"},
             reuse_session = true,
             session_ticket = (user.tls_sessionTicket == "1") and true or false,
             prefer_server_cipher = true,
@@ -30,27 +29,30 @@ function gen_config(user)
         },
         udp_timeout = 60,
         disable_http_check = true,
-        mux = (user.mux == "1") and {
-            enabled = true,
-            concurrency = tonumber(user.mux_concurrency),
-            idle_timeout = 60,
+        transport_plugin = (user.tls == nil or user.tls ~= "1") and user.trojan_transport == "original" and {
+            enabled = user.plugin_type ~= nil,
+            type = user.plugin_type or "plaintext",
+            command = user.plugin_type ~= "plaintext" and user.plugin_cmd or nil,
+            option = user.plugin_type ~= "plaintext" and user.plugin_option or nil,
+            arg = user.plugin_type ~= "plaintext" and { user.plugin_arg } or nil,
+            env = {}
         } or nil,
-        websocket = (user.trojan_ws == "1") and {
+        websocket = user.trojan_transport and user.trojan_transport:find('ws') and {
             enabled = true,
-            path = (user.v2ray_ws_path ~= nil) and user.v2ray_ws_path or "/",
-            hostname = (user.v2ray_ws_host ~= nil) and user.v2ray_ws_host or (user.tls_serverName ~= nil and user.tls_serverName or user.address)
+            path = user.ws_path or "/",
+            host = user.ws_host or (user.tls_serverName or user.address)
         } or nil,
         shadowsocks = (user.ss_aead == "1") and {
             enabled = true,
-            method = (user.ss_aead_method ~= nil) and user.ss_aead_method or "AEAD_AES_128_GCM",
-            password = (user.ss_aead_pwd ~= nil) and user.ss_aead_pwd or ""
+            method = user.ss_aead_method or "aead_aes_128_gcm",
+            password = user.ss_aead_pwd or ""
         } or nil,
         tcp = {
             prefer_ipv4 = false,
             no_delay = true,
             keep_alive = true,
             reuse_port = false,
-            fast_open = (user.fast_open == "true") and true or false,
+            fast_open = (user.tcp_fast_open and user.tcp_fast_open == "1") and true or false,
             fast_open_qlen = 20
         }
     }
